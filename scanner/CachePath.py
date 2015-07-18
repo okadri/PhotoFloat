@@ -1,12 +1,19 @@
 import os.path
 from datetime import datetime
+import time
+
+START_TIME = datetime.now()
 
 def message(category, text):
+	global START_TIME
 	if message.level <= 0:
 		sep = "  "
 	else:
 		sep = "--"
-	print "%s %s%s[%s]%s%s" % (datetime.now().isoformat(), max(0, message.level) * "  |", sep, category, max(1, (14 - len(category))) * " ", text)
+	
+	c = datetime.now()-START_TIME
+	elapsed = "%02dh%02dm%02ds" % (c.seconds/3600, (c.seconds%3600)/60, c.seconds)
+	print "%s %s%s[%s]%s%s" % (elapsed, max(0, message.level) * "  |", sep, category, max(1, (14 - len(category))) * " ", text)
 message.level = -1
 def next_level():
 	message.level += 1
