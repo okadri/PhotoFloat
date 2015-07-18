@@ -5,9 +5,12 @@ from datetime import datetime
 from PhotoAlbum import Photo, Album, PhotoAlbumEncoder
 from CachePath import *
 import json
+import codecs
 
 class TreeWalker:
-	def __init__(self, album_path, cache_path):
+	def __init__(self, album_path, cache_path, excluded_directories=[], dry_run=False):
+		self.dry_run = dry_run
+		self.excluded_directories = excluded_directories
 		self.album_path = os.path.abspath(album_path).decode(sys.getfilesystemencoding())
 		self.cache_path = os.path.abspath(cache_path).decode(sys.getfilesystemencoding())
 		set_cache_path_base(self.album_path)
@@ -17,6 +20,7 @@ class TreeWalker:
 		self.big_lists()
 		self.remove_stale()
 		message("complete", "")
+		
 	def walk(self, path):
 		next_level()
 		if not os.access(path, os.R_OK | os.X_OK):
@@ -45,9 +49,9 @@ class TreeWalker:
 				cached_album = None
 		if not cached:
 			album = Album(path)
-		for entry in os.listdir(path):
-			if entry[0] == '.':
-				continue
+			
+		entries = sorted(os.listdir(path))
+		for entry in entries:
 			try:
 				entry = entry.decode(sys.getfilesystemencoding())
 			except KeyboardInterrupt:
@@ -59,6 +63,11 @@ class TreeWalker:
 				continue
 			entry = os.path.join(path, entry)
 			if os.path.isdir(entry):
+				if any([entry.endswith(x) for x in self.excluded_directories]):
+					continue
+				if entry[0] == '.':
+					continue
+				
 				next_walked_album = self.walk(entry)
 				if next_walked_album is not None:
 					album.add_album(next_walked_album)
@@ -73,7 +82,7 @@ class TreeWalker:
 						photo = cached_photo
 				if not cache_hit:
 					message("metainfo", os.path.basename(entry))
-					photo = Photo(entry, self.cache_path)
+					photo = Photo(entry, self.cache_path, dry_run=self.dry_run)
 				if photo.is_valid:
 					self.all_photos.append(photo)
 					album.add_photo(photo)
@@ -88,16 +97,20 @@ class TreeWalker:
 			message("empty", os.path.basename(path))
 		back_level()
 		return album
+	
 	def big_lists(self):
 		photo_list = []
 		self.all_photos.sort()
 		for photo in self.all_photos:
 			photo_list.append(photo.path)
 		message("caching", "all photos path list")
-		fp = open(os.path.join(self.cache_path, "all_photos.json"), 'w')
-		json.dump(photo_list, fp, cls=PhotoAlbumEncoder)
+		fp = codecs.open(os.path.join(self.cache_path, "all_photos.json"), 'w', 'utf-8')
+		json.dump(photo_list, fp, cls=PhotoAlbumEncoder, indent=4)
 		fp.close()
+		
 	def remove_stale(self):
+		return  # FIXME
+    
 		message("cleanup", "building stale list")
 		all_cache_entries = { "all_photos.json": True, "latest_photos.json": True }
 		for album in self.all_albums:

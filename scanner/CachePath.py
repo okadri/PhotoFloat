@@ -36,10 +36,12 @@ def cache_base(path):
 def json_cache(path):
 	return cache_base(path) + ".json"
 def image_cache(path, size, square=False):
+	assert len(size) == 2
 	if square:
-		suffix = str(size) + "s"
+		assert size[0] == size[1]
+		suffix = size[0] + "s"
 	else:
-		suffix = str(size)
+		suffix = "%dx%d" % size
 	return cache_base(path) + "_" + suffix + ".jpg"
 def file_mtime(path):
 	return datetime.fromtimestamp(int(os.path.getmtime(path)))

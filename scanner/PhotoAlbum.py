@@ -6,6 +6,8 @@ import os.path
 from PIL import Image
 from PIL.ExifTags import TAGS
 import gc
+import iptcinfo
+import codecs
 
 class Album(object):
 	def __init__(self, path):
@@ -66,8 +68,8 @@ class Album(object):
 		
 	def cache(self, base_dir):
 		self._sort()
-		fp = open(os.path.join(base_dir, self.cache_path), 'w')
-		json.dump(self, fp, cls=PhotoAlbumEncoder)
+		fp = codecs.open(os.path.join(base_dir, self.cache_path), 'w', 'utf-8')
+		json.dump(self, fp, cls=PhotoAlbumEncoder, indent=4)
 		fp.close()
 	@staticmethod
 	def from_cache(path):
@@ -104,10 +106,14 @@ class Album(object):
 		return None
 	
 class Photo(object):
-	thumb_sizes = [ (75, True), (150, True), (640, False), (800, False), (1024, False) ]
-	def __init__(self, path, thumb_path=None, attributes=None):
+	thumb_sizes = [ (100, False, 75), (200, False, 75), (300, False, 75), (640, False, 88), (800, False, 88), (1024, False, 88), (1920, False, 88) ]
+	
+	def __init__(self, path, thumb_path=None, attributes=None, dry_run=False):
 		self._path = trim_base(path)
+		self._fullPath = os.path.realpath(path)
 		self.is_valid = True
+		self.dry_run = dry_run
+		self._thumbnailSizes = []
 		try:
 			mtime = file_mtime(path)
 		except KeyboardInterrupt:
@@ -128,8 +134,11 @@ class Photo(object):
 		except:
 			self.is_valid = False
 			return
-		self._metadata(image)
-		self._thumbnails(image, thumb_path, path)
+		
+		if not self.dry_run:
+			self._metadata(image)
+			self._thumbnails(image, thumb_path, path)
+			
 	def _metadata(self, image):
 		self._attributes["size"] = image.size
 		self._orientation = 1
@@ -141,6 +150,17 @@ class Photo(object):
 			return
 		if not info:
 			return
+	
+		image_tags = None
+		try:
+			iptc = iptcinfo.IPTCInfo(self._fullPath)
+			image_tags = iptc.keywords
+		except:
+			print "Warning: Could not get IPTC data of '%s'" % self._fullPath
+			#raise RuntimeError("Could not get IPTC data of '%s'" % self._fullPath)
+		
+		if image_tags:
+			self._attributes["tags"] = image_tags
 		
 		exif = {}
 		for tag, value in info.items():
@@ -155,13 +175,16 @@ class Photo(object):
 					except:
 						continue
 			exif[decoded] = value
-		
+			
 		if "Orientation" in exif:
 			self._orientation = exif["Orientation"];
 			if self._orientation in range(5, 9):
 				self._attributes["size"] = (self._attributes["size"][1], self._attributes["size"][0])
 			if self._orientation - 1 < len(self._metadata.orientation_list):
 				self._attributes["orientation"] = self._metadata.orientation_list[self._orientation - 1]
+		# FIXME does not work
+		if "Windows Rating" in exif:
+			self._attributes["rating"] = exif["Windows Rating"]
 		if "Make" in exif:
 			self._attributes["make"] = exif["Make"]
 		if "Model" in exif:
@@ -224,15 +247,30 @@ class Photo(object):
 	_metadata.scene_capture_type_list = ["Standard", "Landscape", "Portrait", "Night scene"]
 	_metadata.subject_distance_range_list = ["Unknown", "Macro", "Close view", "Distant view"]
 		
-	def _thumbnail(self, image, thumb_path, original_path, size, square=False):
-		thumb_path = os.path.join(thumb_path, image_cache(self._path, size, square))
-		info_string = "%s -> %spx" % (os.path.basename(original_path), str(size))
+	def _thumbnail(self, image, thumb_path, original_path, size, square=False, quality=88):
+	
+		# compute thumbnail size
+		aspectRatio = float(image.size[0])/float(image.size[1])
+		if image.size[0] > image.size[1]:
+			thumbSize = (size, int(1.0/aspectRatio*size))
+		else:
+			w = int(image.size[1]/float(size))
+			thumbSize = (int(aspectRatio*size), size)
+			
+		self._thumbnailSizes.append(thumbSize)
+			
+		thumb_path = os.path.join(thumb_path, image_cache(self._path, thumbSize, square))
+		info_string = "%s -> %dx%d px" % (os.path.basename(original_path), thumbSize[0], thumbSize[1])
 		if square:
 			info_string += ", square"
+		info_string += ", quality=%d" % quality
 		message("thumbing", info_string)
-		if os.path.exists(thumb_path) and file_mtime(thumb_path) >= self._attributes["dateTimeFile"]:
-			return
+		
+		#FIXME
+		#if os.path.exists(thumb_path) and file_mtime(thumb_path) >= self._attributes["dateTimeFile"]:
+		#	return
 		gc.collect()
+		
 		try:
 			image = image.copy()
 		except KeyboardInterrupt:
@@ -259,8 +297,10 @@ class Photo(object):
 			image = image.crop((left, top, right, bottom))
 			gc.collect()
 		image.thumbnail((size, size), Image.ANTIALIAS)
+		
+		
 		try:
-			image.save(thumb_path, "JPEG", quality=88)
+			image.save(thumb_path, "JPEG", quality=quality)
 		except KeyboardInterrupt:
 			try:
 				os.unlink(thumb_path)
@@ -298,10 +338,13 @@ class Photo(object):
 			# Rotation 90
 			mirror = image.transpose(Image.ROTATE_90)
 		for size in Photo.thumb_sizes:
-			self._thumbnail(mirror, thumb_path, original_path, size[0], size[1])
+			self._thumbnail(mirror, thumb_path, original_path, size[0], size[1], quality=size[2])
 	@property
 	def name(self):
 		return os.path.basename(self._path)
+	@property
+	def thumbnailSizes(self):
+		return self._thumbnailSizes
 	def __str__(self):
 		return self.name
 	@property
@@ -346,7 +389,7 @@ class Photo(object):
 					pass
 		return Photo(path, None, dictionary)
 	def to_dict(self):
-		photo = { "name": self.name, "date": self.date }
+		photo = { "name": self.name, "date": self.date, "thumbnailSizes": self.thumbnailSizes }
 		photo.update(self.attributes)
 		return photo
 
@@ -357,4 +400,4 @@ class PhotoAlbumEncoder(json.JSONEncoder):
 		if isinstance(obj, Album) or isinstance(obj, Photo):
 			return obj.to_dict()
 		return json.JSONEncoder.default(self, obj)
-		
+
