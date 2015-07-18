@@ -7,6 +7,16 @@ from CachePath import *
 import json
 import codecs
 
+import os, errno
+
+def mkdir_p(path):
+	try:
+		os.makedirs(path)
+	except OSError as exc: # Python >2.5
+		if exc.errno == errno.EEXIST and os.path.isdir(path):
+			pass
+		else: raise
+
 class TreeWalker:
 	def __init__(self, album_path, cache_path, excluded_directories=[], dry_run=False):
 		self.dry_run = dry_run
@@ -28,7 +38,13 @@ class TreeWalker:
 			back_level()
 			return None
 		message("walking", os.path.basename(path))
+		
 		cache = os.path.join(self.cache_path, json_cache(path))
+		
+		thumb_cache_path = os.path.join(self.cache_path, cache_base(path))
+		# print "****", thumb_cache_path
+		mkdir_p(thumb_cache_path)
+		
 		cached = False
 		cached_album = None
 		if os.path.exists(cache):

@@ -12,6 +12,7 @@ import codecs
 class Album(object):
 	def __init__(self, path):
 		self._path = trim_base(path)
+		# print "* Album(%s)" % path
 		self._photos = list()
 		self._albums = list()
 		self._photos_sorted = True
@@ -29,7 +30,9 @@ class Album(object):
 		return self.path
 	@property
 	def cache_path(self):
-		return json_cache(self.path)
+		result = json_cache(self.path)
+		# print "Album.cache_path = ", result
+		return result
 	@property
 	def date(self):
 		self._sort()
@@ -68,7 +71,9 @@ class Album(object):
 		
 	def cache(self, base_dir):
 		self._sort()
-		fp = codecs.open(os.path.join(base_dir, self.cache_path), 'w', 'utf-8')
+		fname = os.path.join(base_dir, self.cache_path)
+		# print "Album.cache writes to '%s'" % fname
+		fp = codecs.open(fname, 'w', 'utf-8')
 		json.dump(self, fp, cls=PhotoAlbumEncoder, indent=4)
 		fp.close()
 	@staticmethod
@@ -114,6 +119,7 @@ class Photo(object):
 		self.is_valid = True
 		self.dry_run = dry_run
 		self._thumbnailSizes = []
+		# print "* Photo(%r, %r) | %r" % (path, thumb_path, self._path)
 		try:
 			mtime = file_mtime(path)
 		except KeyboardInterrupt:
@@ -308,7 +314,7 @@ class Photo(object):
 				pass
 			raise
 		except:
-			message("save failure", os.path.basename(thumb_path))
+			message("save failure", thumb_path)
 			try:
 				os.unlink(thumb_path)
 			except:
