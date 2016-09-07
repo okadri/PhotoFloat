@@ -29,6 +29,13 @@ a:hover {
 	top: 2.5em;
 	padding: 1em;
 }
+#album-view:not(.photo-view-container) #thumbs img {
+        padding: 0;
+        float: left;
+        display: block;
+        border: 1px solid #CCC;
+        margin: 1em;
+}
 #thumbs {
 	clear: both;
 	line-height: 0;
@@ -49,17 +56,26 @@ a:hover {
 	float: left;
 	display: block;
 	width: 150px;
-	height: 60px;
+	height: 25px;
 	text-align: center;
 	font-style: italic;
 	font-size: 12px;
 	background-repeat: no-repeat;
 	background-position: top;
-	padding-top: 150px;
+	padding-top: 125px;
 	background-image: url(../img/image-placeholder.png);
+	border: 1px solid #CCC;
+	margin: 1em;
+	min-height: 19px;
+	color: #fff;
+	text-shadow: 0 1px 3px rgba(0,0,0,.4);
+	font-size: 16px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	font-weight: 700;
+	white-space: nowrap;
+	font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
-
-
 #next, #back {
 	position: absolute;
 	width: auto;
@@ -203,3 +219,4 @@ a:hover {
 	font-weight: bold;
 	font-style: italic;
 }
+
