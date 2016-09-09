@@ -5,10 +5,6 @@ from CachePath import message
 import sys
 import os
 
-# FIXME: make this a command line parameter:
-#        list of directories to exclude
-excludedDirectories = []
-
 def main():
 	reload(sys)
 	sys.setdefaultencoding("UTF-8")
@@ -18,7 +14,7 @@ def main():
 		return
 	try:
 		os.umask(022)
-		TreeWalker(sys.argv[1], sys.argv[2], excluded_directories=excludedDirectories, dry_run=False)
+		TreeWalker(sys.argv[1], sys.argv[2])
 	except KeyboardInterrupt:
 		message("keyboard", "CTRL+C pressed, quitting.")
 		sys.exit(-97)
